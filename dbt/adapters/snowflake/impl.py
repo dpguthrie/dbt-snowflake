@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from typing import Mapping, Any, Optional, List, Union, Dict
 
@@ -117,6 +118,26 @@ class SnowflakeAdapter(SQLAdapter):
                 return []
             else:
                 raise
+            
+    def get_stats(self, result):
+        all_stats = []
+        variant_columns = [
+            'OPERATOR_STATISTICS', 'EXECUTION_TIME_BREAKDOWN', 'OPERATOR_ATTRIBUTES'
+        ]
+        query_id = result.adapter_response.get('query_id', None)
+        if query_id is None:
+            return all_stats
+        
+        sql = f"select * from table(get_query_operator_stats('{query_id}'));"
+        response, table = self.execute(sql, fetch=True)
+        if response.code == 'SUCCESS':
+            for row in table.rows:
+                stats = row.dict()
+                for column in variant_columns:
+                    stats[column] = json.loads(stats[column])
+                all_stats.append(stats)
+
+        return all_stats
 
     def list_relations_without_caching(self, schema_relation: SnowflakeRelation) -> List[SnowflakeRelation]:  # type: ignore
         kwargs = {"schema_relation": schema_relation}
